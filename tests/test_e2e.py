@@ -51,3 +51,38 @@ def test_custom_csv_snapshot_and_navigation(tmp_path,monkeypatch):
     assert repeated.status_code==200
     assert repeated.json()['manifest']['run_id']==rid
     assert repeated.json()['manifest']['sha256']==result['manifest']['sha256']
+
+def test_rerun_adds_no_schedule_or_deviation(tmp_path,monkeypatch):
+    # 重跑同一批：批号/窗口/锚点/偏离完全一致，不新增排期或偏离，不产生第二条批次
+    c=client(tmp_path,monkeypatch)
+    run=c.post('/api/runs',json={}).json();rid=run['manifest']['run_id']
+    rerun=c.post('/api/runs/'+rid+'/rerun',json={}).json()
+    assert rerun['manifest']['run_id']==rid
+    assert rerun['windows']==run['windows']
+    assert rerun['anchors']==run['anchors']
+    assert rerun['deviations']==run['deviations']
+    assert len(c.get('/api/runs').json())==1
+
+def test_rerun_failure_keeps_previous_conclusion(tmp_path,monkeypatch):
+    # 重算失败：旧批结论原样保留，接口 409，不覆盖也不新增批次
+    c=client(tmp_path,monkeypatch)
+    run=c.post('/api/runs',json={'dataset':'clean'}).json();rid=run['manifest']['run_id']
+    from app import engine
+    def boom(*a,**k):
+        from app.errors import BusinessError
+        raise BusinessError('BROKEN_CSV','模拟重算损坏')
+    monkeypatch.setattr(engine,'evaluate',boom)
+    response=c.post('/api/runs/'+rid+'/rerun',json={})
+    assert response.status_code==409
+    assert response.json()['code']=='RERUN_FAILED'
+    kept=c.get('/api/runs/'+rid).json()
+    assert kept['manifest']['sha256']==run['manifest']['sha256']
+    assert kept['balance']['status']=='可锁库'
+    assert len(c.get('/api/runs').json())==1
+
+def test_anchor_module_in_pipeline_and_pages(tmp_path,monkeypatch):
+    c=client(tmp_path,monkeypatch)
+    assert c.post('/api/anchor',json={}).status_code==200
+    run=c.post('/api/runs',json={}).json()
+    html=c.get('/anchor?run_id='+run['manifest']['run_id']).text
+    assert '排期锚点裁决' in html and 'ACTUAL_FIRST' in html

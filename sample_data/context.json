@@ -2,6 +2,7 @@
   "keys": [
     "intake",
     "protocol",
+    "anchor",
     "windows",
     "deviation",
     "retest",

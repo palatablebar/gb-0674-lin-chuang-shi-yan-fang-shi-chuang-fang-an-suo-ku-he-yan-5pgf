@@ -31,3 +31,6 @@ target/
 *.o
 *.obj
 .DS_Store
+
+# 本地标准库校验脚手架（容器内以 pytest 为准）
+.verify/

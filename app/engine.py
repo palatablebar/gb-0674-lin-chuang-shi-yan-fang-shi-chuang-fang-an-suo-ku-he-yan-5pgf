@@ -6,7 +6,7 @@ from app.config import ROOT, MODULES, MAX_BYTES
 from app.errors import BusinessError
 from app.manifest import digest, make_manifest
 
-def evaluate(payload=None, until=7, snapshot=None):
+def evaluate(payload=None, until=None, snapshot=None):
     payload=payload or {}
     dataset=payload.get('dataset','dirty')
     if dataset not in {'dirty','clean','legacy'}: raise BusinessError('BAD_DATASET','样例名称无效')
@@ -18,7 +18,7 @@ def evaluate(payload=None, until=7, snapshot=None):
     start=time.perf_counter()
     state={'raw_bytes':raw,'context':context,'records':[],'quarantine':[], 'counts':{},'views':{},'source':dataset}
     for index,key in enumerate(MODULES,1):
-        if index>until: break
+        if until is not None and index>until: break
         import_module(f'app.modules.{key}.rules').apply(state)
     state['input_snapshot']={'bytes_b64':base64.b64encode(raw).decode(),'context':deepcopy(context)}
     state.pop('raw_bytes',None)
